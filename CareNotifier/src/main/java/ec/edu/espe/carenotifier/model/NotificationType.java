@@ -1,0 +1,15 @@
+package ec.edu.espe.carenotifier.model;
+
+public enum NotificationType {
+    HEALTH_ALERT,
+    CRITICAL_ALERT,
+    APPOINTMENT_REMINDER,
+    MEDICATION_REMINDER,
+    TEST_RESULT,
+    EMERGENCY_ALERT,
+    EMERGENCY_NOTIFICATION,
+    ROUTINE_CHECKUP,
+    SYSTEM_NOTIFICATION,
+    CARE_PLAN_UPDATE,
+    VITAL_SIGN_ANOMALY
+}
