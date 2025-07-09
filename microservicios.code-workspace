@@ -1,0 +1,11 @@
+{
+  "folders": [
+    { "path": "ms-eureka-server" },
+    { "path": "ms-gateway-server" },
+    { "path": "sincronizacion" },
+    { "path": "HealthAnalyzer" },
+    { "path": "CareNotifier" },
+    { "path": "PatientDataCollector" }
+  ],
+  "settings": {}
+}

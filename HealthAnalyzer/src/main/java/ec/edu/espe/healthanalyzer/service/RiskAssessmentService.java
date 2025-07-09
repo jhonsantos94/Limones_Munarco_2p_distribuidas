@@ -2,6 +2,7 @@ package ec.edu.espe.healthanalyzer.service;
 
 import ec.edu.espe.healthanalyzer.constant.RiskLevel;
 import ec.edu.espe.healthanalyzer.dto.VitalSignEventDto;
+import ec.edu.espe.healthanalyzer.model.PatientHealthProfile;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -21,9 +22,52 @@ public class RiskAssessmentService {
     private static final double SEVERE_RESPIRATORY_RATE_HIGH = 30.0;
     private static final double SEVERE_OXYGEN_SATURATION = 90.0;
 
-    public String assessRisk(VitalSignEventDto vitalSign, List<String> anomalies) {
+    public String assessOverallRisk(VitalSignEventDto vitalSign, List<String> anomalies, PatientHealthProfile profile) {
         int riskScore = calculateRiskScore(vitalSign, anomalies);
+        riskScore += calculateProfileBasedRisk(vitalSign, profile);
         return determineRiskLevel(riskScore);
+    }
+
+    private int calculateProfileBasedRisk(VitalSignEventDto vitalSign, PatientHealthProfile profile) {
+        if (profile == null) {
+            return 0;
+        }
+
+        int profileRisk = 0;
+        profileRisk += calculateAgeBasedRisk(profile.getAge());
+        profileRisk += calculateConditionBasedRisk(vitalSign, profile.getMedicalConditions());
+        return profileRisk;
+    }
+
+    private int calculateAgeBasedRisk(int age) {
+        return age > 65 ? 2 : 0;
+    }
+
+    private int calculateConditionBasedRisk(VitalSignEventDto vitalSign, String conditions) {
+        if (conditions == null) {
+            return 0;
+        }
+
+        int risk = 0;
+        conditions = conditions.toLowerCase();
+        
+        if (conditions.contains("hypertension")) {
+            risk += calculateHypertensionRisk(vitalSign);
+        }
+        if (conditions.contains("diabetes")) {
+            risk += 1;
+        }
+        if (conditions.contains("heart") || conditions.contains("cardiac")) {
+            risk += 2;
+        }
+        
+        return risk;
+    }
+
+    private int calculateHypertensionRisk(VitalSignEventDto vitalSign) {
+        boolean hasHighBP = vitalSign.getBloodPressureSystolic() > 140 || 
+                           vitalSign.getBloodPressureDiastolic() > 90;
+        return hasHighBP ? 2 : 0;
     }
 
     private int calculateRiskScore(VitalSignEventDto vitalSign, List<String> anomalies) {

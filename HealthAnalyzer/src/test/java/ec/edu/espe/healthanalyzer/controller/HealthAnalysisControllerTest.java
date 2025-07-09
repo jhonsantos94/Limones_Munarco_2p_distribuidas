@@ -1,16 +1,18 @@
 package ec.edu.espe.healthanalyzer.controller;
 
+import ec.edu.espe.healthanalyzer.constant.RiskLevel;
 import ec.edu.espe.healthanalyzer.dto.AnalysisRequestDto;
 import ec.edu.espe.healthanalyzer.dto.AnalysisResponseDto;
 import ec.edu.espe.healthanalyzer.dto.VitalSignEventDto;
 import ec.edu.espe.healthanalyzer.model.PatientHealthProfile;
 import ec.edu.espe.healthanalyzer.service.HealthAnalysisService;
-import ec.edu.espe.healthanalyzer.service.RiskAssessmentService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
@@ -24,14 +26,17 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
+@ExtendWith(MockitoExtension.class)
 @WebMvcTest(HealthAnalysisController.class)
 @ActiveProfiles("test")
 class HealthAnalysisControllerTest {
+    
+    private static final String TEST_PATIENT_ID = "PATIENT-001";
 
     @Autowired
     private MockMvc mockMvc;
 
-    @MockBean
+    @Mock
     private HealthAnalysisService healthAnalysisService;
 
     @Autowired
@@ -41,7 +46,7 @@ class HealthAnalysisControllerTest {
     void testAnalyzeVitalSigns() throws Exception {
         // Arrange
         VitalSignEventDto vitalSignEvent = new VitalSignEventDto();
-        vitalSignEvent.setPatientId("PATIENT-001");
+        vitalSignEvent.setPatientId(TEST_PATIENT_ID);
         vitalSignEvent.setTimestamp(LocalDateTime.now());
         vitalSignEvent.setHeartRate(75.0);
         vitalSignEvent.setBloodPressureSystolic(120.0);
@@ -49,20 +54,20 @@ class HealthAnalysisControllerTest {
         vitalSignEvent.setTemperature(36.5);
 
         PatientHealthProfile profile = new PatientHealthProfile();
-        profile.setPatientId("PATIENT-001");
+        profile.setPatientId(TEST_PATIENT_ID);
         profile.setAge(45);
 
         AnalysisRequestDto request = new AnalysisRequestDto();
         request.setVitalSignEvent(vitalSignEvent);
         request.setPatientProfile(profile);
-        request.setPatientId("PATIENT-001");
+        request.setPatientId(TEST_PATIENT_ID);
 
         AnalysisResponseDto expectedResponse = new AnalysisResponseDto();
-        expectedResponse.setPatientId("PATIENT-001");
-        expectedResponse.setRiskLevel(RiskAssessmentService.RiskLevel.LOW);
+        expectedResponse.setPatientId(TEST_PATIENT_ID);
+        expectedResponse.setRiskLevel(RiskLevel.LOW);
         expectedResponse.setRecommendations(List.of("Continue normal monitoring"));
 
-        when(healthAnalysisService.analyzeVitalSigns(any(), any()))
+        when(healthAnalysisService.analyzeVitalSigns(any(AnalysisRequestDto.class)))
             .thenReturn(expectedResponse);
 
         // Act & Assert
@@ -70,7 +75,7 @@ class HealthAnalysisControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.patientId").value("PATIENT-001"))
+                .andExpect(jsonPath("$.patientId").value(TEST_PATIENT_ID))
                 .andExpect(jsonPath("$.riskLevel").value("LOW"));
     }
 
@@ -78,17 +83,17 @@ class HealthAnalysisControllerTest {
     void testGetPatientProfile() throws Exception {
         // Arrange
         PatientHealthProfile profile = new PatientHealthProfile();
-        profile.setPatientId("PATIENT-001");
+        profile.setPatientId(TEST_PATIENT_ID);
         profile.setAge(45);
         profile.setGender("M");
 
-        when(healthAnalysisService.getPatientProfile("PATIENT-001"))
-            .thenReturn(Optional.of(profile));
+        when(healthAnalysisService.getPatientProfile(any(String.class)))
+            .thenAnswer(invocation -> Optional.of(profile));
 
         // Act & Assert
-        mockMvc.perform(get("/api/health-analyzer/profile/PATIENT-001"))
+        mockMvc.perform(get("/api/health-analyzer/profile/" + TEST_PATIENT_ID))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.patientId").value("PATIENT-001"))
+                .andExpect(jsonPath("$.patientId").value(TEST_PATIENT_ID))
                 .andExpect(jsonPath("$.age").value(45))
                 .andExpect(jsonPath("$.gender").value("M"));
     }
@@ -97,7 +102,7 @@ class HealthAnalysisControllerTest {
     void testGetPatientProfileNotFound() throws Exception {
         // Arrange
         when(healthAnalysisService.getPatientProfile("NONEXISTENT"))
-            .thenReturn(Optional.empty());
+            .thenAnswer(invocation -> Optional.empty());
 
         // Act & Assert
         mockMvc.perform(get("/api/health-analyzer/profile/NONEXISTENT"))

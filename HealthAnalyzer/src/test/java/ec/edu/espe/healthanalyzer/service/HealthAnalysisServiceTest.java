@@ -1,11 +1,14 @@
 package ec.edu.espe.healthanalyzer.service;
 
+import ec.edu.espe.healthanalyzer.dto.AnalysisRequestDto;
 import ec.edu.espe.healthanalyzer.dto.AnalysisResponseDto;
 import ec.edu.espe.healthanalyzer.dto.VitalSignEventDto;
 import ec.edu.espe.healthanalyzer.model.HealthAnalysis;
 import ec.edu.espe.healthanalyzer.model.PatientHealthProfile;
+import ec.edu.espe.healthanalyzer.constant.RiskLevel;
 import ec.edu.espe.healthanalyzer.repository.HealthAnalysisRepository;
 import ec.edu.espe.healthanalyzer.repository.PatientHealthProfileRepository;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -24,6 +27,8 @@ import static org.mockito.Mockito.*;
 @ActiveProfiles("test")
 @TestPropertySource(locations = "classpath:application-test.properties")
 class HealthAnalysisServiceTest {
+
+    private static final String TEST_PATIENT_ID = "PATIENT-001";
 
     @MockBean
     private HealthAnalysisRepository healthAnalysisRepository;
@@ -48,20 +53,24 @@ class HealthAnalysisServiceTest {
     private VitalSignEventDto vitalSignEvent;
     private PatientHealthProfile patientProfile;
 
+    @MockBean
+    private RabbitTemplate rabbitTemplate;
+
     @BeforeEach
     void setUp() {
         healthAnalysisService = new HealthAnalysisService(
             healthAnalysisRepository,
             patientHealthProfileRepository,
-            anomalyDetectionService,
-            riskAssessmentService,
+            rabbitTemplate,
             healthAlertService,
-            trendAnalysisService
+            trendAnalysisService,
+            anomalyDetectionService,
+            riskAssessmentService
         );
 
         // Setup test data
         vitalSignEvent = new VitalSignEventDto();
-        vitalSignEvent.setPatientId("PATIENT-001");
+        vitalSignEvent.setPatientId(TEST_PATIENT_ID);
         vitalSignEvent.setTimestamp(LocalDateTime.now());
         vitalSignEvent.setHeartRate(75.0);
         vitalSignEvent.setBloodPressureSystolic(120.0);
@@ -71,58 +80,68 @@ class HealthAnalysisServiceTest {
         vitalSignEvent.setRespiratoryRate(16.0);
 
         patientProfile = new PatientHealthProfile();
-        patientProfile.setPatientId("PATIENT-001");
+        patientProfile.setPatientId(TEST_PATIENT_ID);
         patientProfile.setAge(45);
         patientProfile.setGender("M");
         patientProfile.setMedicalConditions("Hypertension");
     }
 
     @Test
-    void testAnalyzeVitalSigns_NormalValues() {
+    void analyzeVitalSignsNormalValues() {
         // Arrange
-        when(patientHealthProfileRepository.findByPatientId("PATIENT-001"))
+        when(patientHealthProfileRepository.findByPatientId(TEST_PATIENT_ID))
             .thenReturn(Optional.of(patientProfile));
         when(anomalyDetectionService.detectAnomalies(any(), any()))
             .thenReturn(java.util.Collections.emptyList());
         when(riskAssessmentService.assessOverallRisk(any(), any(), any()))
-            .thenReturn(RiskAssessmentService.RiskLevel.LOW);
+            .thenReturn(RiskLevel.LOW);
         when(healthAnalysisRepository.save(any(HealthAnalysis.class)))
             .thenAnswer(invocation -> invocation.getArgument(0));
 
         // Act
-        AnalysisResponseDto response = healthAnalysisService.analyzeVitalSigns(vitalSignEvent, patientProfile);
+        AnalysisRequestDto request = new AnalysisRequestDto();
+        request.setPatientId(TEST_PATIENT_ID);
+        request.setVitalSignEvent(vitalSignEvent);
+        request.setPatientProfile(patientProfile);
+
+        AnalysisResponseDto response = healthAnalysisService.analyzeVitalSigns(request);
 
         // Assert
         assertNotNull(response);
-        assertEquals("PATIENT-001", response.getPatientId());
-        assertEquals(RiskAssessmentService.RiskLevel.LOW, response.getRiskLevel());
+        assertEquals(TEST_PATIENT_ID, response.getPatientId());
+        assertEquals(RiskLevel.LOW, response.getRiskLevel());
         assertNotNull(response.getRecommendations());
         
         verify(healthAnalysisRepository).save(any(HealthAnalysis.class));
     }
 
     @Test
-    void testAnalyzeVitalSigns_HighRiskValues() {
+    void analyzeVitalSignsHighRiskValues() {
         // Arrange
         vitalSignEvent.setHeartRate(150.0);
         vitalSignEvent.setBloodPressureSystolic(180.0);
         
-        when(patientHealthProfileRepository.findByPatientId("PATIENT-001"))
+        when(patientHealthProfileRepository.findByPatientId(TEST_PATIENT_ID))
             .thenReturn(Optional.of(patientProfile));
         when(anomalyDetectionService.detectAnomalies(any(), any()))
             .thenReturn(java.util.List.of("Tachycardia detected", "Hypertension detected"));
         when(riskAssessmentService.assessOverallRisk(any(), any(), any()))
-            .thenReturn(RiskAssessmentService.RiskLevel.HIGH);
+            .thenReturn(RiskLevel.HIGH);
         when(healthAnalysisRepository.save(any(HealthAnalysis.class)))
             .thenAnswer(invocation -> invocation.getArgument(0));
 
         // Act
-        AnalysisResponseDto response = healthAnalysisService.analyzeVitalSigns(vitalSignEvent, patientProfile);
+        AnalysisRequestDto request = new AnalysisRequestDto();
+        request.setPatientId(TEST_PATIENT_ID);
+        request.setVitalSignEvent(vitalSignEvent);
+        request.setPatientProfile(patientProfile);
+
+        AnalysisResponseDto response = healthAnalysisService.analyzeVitalSigns(request);
 
         // Assert
         assertNotNull(response);
-        assertEquals("PATIENT-001", response.getPatientId());
-        assertEquals(RiskAssessmentService.RiskLevel.HIGH, response.getRiskLevel());
+        assertEquals(TEST_PATIENT_ID, response.getPatientId());
+        assertEquals(RiskLevel.HIGH, response.getRiskLevel());
         assertNotNull(response.getAnomalies());
         assertTrue(response.getAnomalies().size() > 0);
         
@@ -132,12 +151,12 @@ class HealthAnalysisServiceTest {
     @Test
     void testProcessVitalSignEvent() {
         // Arrange
-        when(patientHealthProfileRepository.findByPatientId("PATIENT-001"))
+        when(patientHealthProfileRepository.findByPatientId(TEST_PATIENT_ID))
             .thenReturn(Optional.of(patientProfile));
         when(anomalyDetectionService.detectAnomalies(any(), any()))
             .thenReturn(java.util.Collections.emptyList());
         when(riskAssessmentService.assessOverallRisk(any(), any(), any()))
-            .thenReturn(RiskAssessmentService.RiskLevel.LOW);
+            .thenReturn(RiskLevel.LOW);
         when(healthAnalysisRepository.save(any(HealthAnalysis.class)))
             .thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -150,23 +169,28 @@ class HealthAnalysisServiceTest {
     }
 
     @Test
-    void testAnalyzeVitalSigns_WithNullPatientProfile() {
+    void analyzeVitalSignsWithNullPatientProfile() {
         // Arrange
-        when(patientHealthProfileRepository.findByPatientId("PATIENT-001"))
+        when(patientHealthProfileRepository.findByPatientId(TEST_PATIENT_ID))
             .thenReturn(Optional.empty());
         when(anomalyDetectionService.detectAnomalies(any(), any()))
             .thenReturn(java.util.Collections.emptyList());
         when(riskAssessmentService.assessOverallRisk(any(), any(), any()))
-            .thenReturn(RiskAssessmentService.RiskLevel.LOW);
+            .thenReturn(RiskLevel.LOW);
         when(healthAnalysisRepository.save(any(HealthAnalysis.class)))
             .thenAnswer(invocation -> invocation.getArgument(0));
 
         // Act
-        AnalysisResponseDto response = healthAnalysisService.analyzeVitalSigns(vitalSignEvent, null);
+        AnalysisRequestDto request = new AnalysisRequestDto();
+        request.setPatientId(TEST_PATIENT_ID);
+        request.setVitalSignEvent(vitalSignEvent);
+        request.setPatientProfile(null);
+
+        AnalysisResponseDto response = healthAnalysisService.analyzeVitalSigns(request);
 
         // Assert
         assertNotNull(response);
-        assertEquals("PATIENT-001", response.getPatientId());
-        assertEquals(RiskAssessmentService.RiskLevel.LOW, response.getRiskLevel());
+        assertEquals(TEST_PATIENT_ID, response.getPatientId());
+        assertEquals(RiskLevel.LOW, response.getRiskLevel());
     }
 }

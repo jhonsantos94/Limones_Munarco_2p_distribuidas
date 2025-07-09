@@ -3,7 +3,7 @@ server:
 
 spring:
   application:
-    name: API-GATEWAY
+    name: medical-gateway
   cloud:
     gateway:
       discovery:
@@ -11,34 +11,22 @@ spring:
           enabled: true
           lower-case-service-id: true
       routes:
-        - id: publicaciones-autor
-          uri: lb://PUBLICACIONES
+        - id: patient-data
+          uri: lb://PATIENT-DATA-COLLECTOR
           predicates:
-            - Path=/api/autor/**
+            - Path=/api/vital-signs/**
           filters:
             - StripPrefix=1
-        - id: publicaciones-libro
-          uri: lb://PUBLICACIONES
+        - id: health-analyzer
+          uri: lb://HEALTH-ANALYZER
           predicates:
-            - Path=/api/libro/**
+            - Path=/api/analysis/**
           filters:
             - StripPrefix=1
-        - id: categorias
-          uri: lb://CATEGORIAS
+        - id: care-notifier
+          uri: lb://CARE-NOTIFIER
           predicates:
-            - Path=/api/categorias/**
-          filters:
-            - StripPrefix=1
-        - id: notificaciones
-          uri: lb://NOTIFICACIONES
-          predicates:
-            - Path=/api/notificaciones/**
-          filters:
-            - StripPrefix=1
-        - id: catalogo
-          uri: lb://CATALOGO
-          predicates:
-            - Path=/api/catalogo/**
+            - Path=/api/notifications/**
           filters:
             - StripPrefix=1
 

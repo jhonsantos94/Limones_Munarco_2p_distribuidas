@@ -1,40 +1,128 @@
 version: '3.8'
 
+networks:
+  medical-network:
+    driver: bridge
+
 services:
-  cockroach1:
+  # CockroachDB Cluster para datos médicos críticos
+  cockroachdb1:
     image: cockroachdb/cockroach:latest
-    container_name: crdb-node1
-    hostname: crdb-node1  # Importante para el DNS interno
+    container_name: medical-crdb-1
+    hostname: crdb-1
+    networks:
+      - medical-network
     ports:
-      - "26257:26257"  # SQL (externo:26257 → interno:26257)
-      - "8080:8080"    # UI
+      - "26257:26257"
+      - "8080:8080"
     volumes:
-      - cockroach1:/cockroach/cockroach-data
-    command: start-single-node --insecure --advertise-addr=crdb-node1
+      - cockroach_data1:/cockroach/cockroach-data
+    command: start --insecure --join=crdb-1,crdb-2,crdb-3
 
-  cockroach2:
+  cockroachdb2:
     image: cockroachdb/cockroach:latest
-    container_name: crdb-node2
-    hostname: crdb-node2
-    ports:
-      - "26258:26257"  # SQL (externo:26258 → interno:26257)
-      - "8086:8080"    # UI (evita conflicto con 8081)
+    container_name: medical-crdb-2
+    hostname: crdb-2
+    networks:
+      - medical-network
     volumes:
-      - cockroach2:/cockroach/cockroach-data
-    command: start --insecure --store=node2 --listen-addr=0.0.0.0:26257 --http-addr=0.0.0.0:8080 --join=crdb-node1:26257 --advertise-addr=crdb-node2
+      - cockroach_data2:/cockroach/cockroach-data
+    command: start --insecure --join=crdb-1,crdb-2,crdb-3
 
-  cockroach3:
+  cockroachdb3:
     image: cockroachdb/cockroach:latest
-    container_name: crdb-node3
-    hostname: crdb-node3
-    ports:
-      - "26259:26257"  # SQL (externo:26259 → interno:26257)
-      - "8087:8080"    # UI (evita conflicto con 8082)
+    container_name: medical-crdb-3
+    hostname: crdb-3
+    networks:
+      - medical-network
     volumes:
-      - cockroach3:/cockroach/cockroach-data
-    command: start --insecure --store=node3 --listen-addr=0.0.0.0:26257 --http-addr=0.0.0.0:8080 --join=crdb-node1:26257 --advertise-addr=crdb-node3
+      - cockroach_data3:/cockroach/cockroach-data
+    command: start --insecure --join=crdb-1,crdb-2,crdb-3
+
+  # RabbitMQ para mensajería médica en tiempo real
+  rabbitmq:
+    image: rabbitmq:3.12-management
+    container_name: medical-rabbitmq
+    hostname: medical-rabbitmq
+    networks:
+      - medical-network
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      - RABBITMQ_DEFAULT_USER=medical_admin
+      - RABBITMQ_DEFAULT_PASS=medical_secure_pass
+      - RABBITMQ_DEFAULT_VHOST=medical_system
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+      - rabbitmq_logs:/var/log/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Redis para cache y sesiones
+  redis:
+    image: redis:7-alpine
+    container_name: medical-redis
+    hostname: medical-redis
+    networks:
+      - medical-network
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Prometheus para monitoreo
+  prometheus:
+    image: prom/prometheus:v2.46.0
+    container_name: medical-prometheus
+    hostname: medical-prometheus
+    networks:
+      - medical-network
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.enable-lifecycle"
+    depends_on:
+      - rabbitmq
+      - cockroachdb1
+
+  # Grafana para visualización
+  grafana:
+    image: grafana/grafana:latest
+    container_name: medical-grafana
+    hostname: medical-grafana
+    networks:
+      - medical-network
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=medical_grafana_admin
+      - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource
+    volumes:
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
 
 volumes:
-  cockroach1:
-  cockroach2:
-  cockroach3:  # Corregí el typo (antes decía "cockroach3")
+  cockroach_data1:
+  cockroach_data2:
+  cockroach_data3:
+  rabbitmq_data:
+  rabbitmq_logs:
+  redis_data:
+  prometheus_data:
+  grafana_data:

@@ -55,7 +55,7 @@ public class HealthAnalysisService {
 
             // Perform analysis
             List<String> anomalies = anomalyDetectionService.detectAnomalies(vitalSignEvent, profile);
-            String riskLevel = riskAssessmentService.assessRisk(vitalSignEvent, anomalies);
+            String riskLevel = riskAssessmentService.assessOverallRisk(vitalSignEvent, anomalies, profile);
             List<String> recommendations = generateRecommendations(riskLevel);
 
             // Create and save analysis

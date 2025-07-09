@@ -1,0 +1,91 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  # - "first_rules.yml"
+  # - "second_rules.yml"
+
+scrape_configs:
+  # Eureka Server
+  - job_name: 'eureka-server'
+    static_configs:
+      - targets: ['host.docker.internal:8761']
+    metrics_path: '/actuator/prometheus'
+    scrape_interval: 30s
+
+  # API Gateway
+  - job_name: 'api-gateway'
+    static_configs:
+      - targets: ['host.docker.internal:8080']
+    metrics_path: '/actuator/prometheus'
+    scrape_interval: 30s
+
+  # PatientDataCollector
+  - job_name: 'patient-data-collector'
+    static_configs:
+      - targets: ['host.docker.internal:8081']
+    metrics_path: '/actuator/prometheus'
+    scrape_interval: 15s
+    labels:
+      service: 'patient-data-collector'
+      team: 'medical-core'
+
+  # HealthAnalyzer
+  - job_name: 'health-analyzer'
+    static_configs:
+      - targets: ['host.docker.internal:8082']
+    metrics_path: '/actuator/prometheus'
+    scrape_interval: 15s
+    labels:
+      service: 'health-analyzer'
+      team: 'medical-core'
+
+  # CareNotifier
+  - job_name: 'care-notifier'
+    static_configs:
+      - targets: ['host.docker.internal:8083']
+    metrics_path: '/actuator/prometheus'
+    scrape_interval: 15s
+    labels:
+      service: 'care-notifier'
+      team: 'medical-core'
+
+  # Sincronización
+  - job_name: 'sincronizacion'
+    static_configs:
+      - targets: ['host.docker.internal:8084']
+    metrics_path: '/actuator/prometheus'
+    scrape_interval: 30s
+
+  # CockroachDB Cluster
+  - job_name: 'cockroachdb-node1'
+    static_configs:
+      - targets: ['medical-crdb-node1:8080']
+    metrics_path: '/_status/vars'
+    scrape_interval: 30s
+
+  - job_name: 'cockroachdb-node2'
+    static_configs:
+      - targets: ['medical-crdb-node2:8080']
+    metrics_path: '/_status/vars'
+    scrape_interval: 30s
+
+  - job_name: 'cockroachdb-node3'
+    static_configs:
+      - targets: ['medical-crdb-node3:8080']
+    metrics_path: '/_status/vars'
+    scrape_interval: 30s
+
+  # RabbitMQ
+  - job_name: 'rabbitmq'
+    static_configs:
+      - targets: ['medical-rabbitmq:15692']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+
+  # Redis
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['medical-redis:6379']
+    scrape_interval: 30s
